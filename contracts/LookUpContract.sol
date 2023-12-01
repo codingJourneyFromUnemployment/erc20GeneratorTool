@@ -2,16 +2,17 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract LookUpContract is Ownable{
+contract LookUpContract is Ownable, ReentrancyGuard{
 
   struct ERC20token {
     uint tokenID;
     address owner;
-    string tokenSupply;
+    uint256 tokenSupply;
     string tokenName;
     string tokenSymbol;
-    string tokenAddress;
+    address tokenAddress;
     string tokenTransactionHash;
     string tokenCreatedDate;
     
@@ -30,7 +31,7 @@ contract LookUpContract is Ownable{
   uint256 public donationIndex;
 
   event DonationReceived(address indexed _donor, uint256 _amount);
-  event TokenCreated(uint256 indexed id, address indexed owner, string indexed token);
+  event TokenCreated(uint256 indexed id, address indexed owner, address indexed tokenAddress);
 
   constructor() Ownable(msg.sender) {
     tokenIndex = 0;
@@ -39,50 +40,114 @@ contract LookUpContract is Ownable{
 
   function createERC20Token(
     address _owner,
-    string memory _tokenSupply,
+    uint256 _tokenSupply,
     string memory _tokenName,
     string memory _tokenSymbol,
-    string memory _tokenAddress,
+    address _tokenAddress,
     string memory _tokenTransactionHash,
     string memory _tokenCreatedDate
   )  external payable returns (
-    uint256,
-    address,
-    string memory,
-    string memory,
-    string memory,
-    string memory,
-    string memory,
-    string memory,
+    ERC20token memory
   ) {
     require(msg.value >= listingFee, "Insufficient listing fee");
 
     tokenIndex++;
     erc20Tokens[tokenIndex] = ERC20token(
-      tokenIndex,
-      _owner,
-      _tokenSupply,
-      _tokenName,
-      _tokenSymbol,
-      _tokenAddress,
-      _tokenTransactionHash,
-      _tokenCreatedDate
+      {
+        tokenID: tokenIndex,
+        owner: _owner,
+        tokenSupply: _tokenSupply,
+        tokenName: _tokenName,
+        tokenSymbol: _tokenSymbol,
+        tokenAddress: _tokenAddress,
+        tokenTransactionHash: _tokenTransactionHash,
+        tokenCreatedDate: _tokenCreatedDate
+      }
     );
 
     emit TokenCreated(tokenIndex, _owner, _tokenAddress);
 
     return (
-      tokenIndex,
-      _owner,
-      _tokenSupply,
-      _tokenName,
-      _tokenSymbol,
-      _tokenAddress,
+      erc20Tokens[tokenIndex]
     );
   }
 
   function getAllERC20Tokens() public view returns (ERC20token[] memory) {
-    
+    ERC20token[] memory tokenListedArr = new ERC20token[](tokenIndex);
+    for(uint256 i = 0; i < tokenIndex; i++) {
+      tokenListedArr[i] = erc20Tokens[i + 1];
+    }
+    return tokenListedArr;
+  }
+
+  function getERC20Token(uint256 _tokenIndex) external view returns (
+    ERC20token memory
+  ) {
+    require(_tokenIndex > 0 && _tokenIndex <= tokenIndex, "Invalid token index");
+    return (
+      erc20Tokens[_tokenIndex]
+    );
+  }
+
+  function getUserERC20Tokens(address _owner) external view returns (ERC20token[] memory) {
+    uint256 userTokenCount = 0;
+    for(uint256 i = 0; i < tokenIndex; i++) {
+      if(erc20Tokens[i + 1].owner == _owner) {
+        userTokenCount++;
+      }
+    }
+
+    ERC20token[] memory userTokenArr = new ERC20token[](userTokenCount);
+    for(uint256 i = 0; i < tokenIndex; i++) {
+      if(erc20Tokens[i + 1].owner == _owner) {
+        userTokenArr[i] = erc20Tokens[i + 1];
+      }
+    }
+
+    return userTokenArr;
+  }
+
+  function getERC20TokenListingPrice() external view returns (uint256) {
+    return listingFee;
+  }
+
+  function updateListingFee(uint256 _newListingFee) external onlyOwner {
+    listingFee = _newListingFee;
+  }
+
+  function withdraw() external onlyOwner nonReentrant {
+    require(address(this).balance > 0, "Insufficient balance");
+    (bool success, ) = payable(msg.sender).call{value: address(this).balance}("");
+    require(success, "Withdrawal failed");
+  }
+
+  function getContractBalance() external view onlyOwner returns (uint256) {
+    return address(this).balance;
+  }
+
+  function donate() external payable {
+    require(msg.value > 0, "Invalid donation amount");
+
+    donationIndex++;
+    donations[donationIndex] = Donation(
+      {
+        donationID: donationIndex,
+        donor: msg.sender,
+        fund: msg.value
+      }
+    );
+
+    emit DonationReceived(msg.sender, msg.value);
+  }
+
+  function getAllDonations() external view onlyOwner returns (Donation[] memory) {
+    Donation[] memory donationArr = new Donation[](donationIndex);
+
+    for(uint256 i = 0; i < donationIndex; i++) {
+      donationArr[i] = donations[i + 1];
+    }
+
+    return donationArr;
   }
 
 }
