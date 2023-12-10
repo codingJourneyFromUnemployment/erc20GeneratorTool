@@ -62,6 +62,25 @@ const stateContextProvider = ({children}) => {
       }
 
       //get contract
+      const lookUpContract = await connectingWithContract();
+
+      //if owner connect, get contract balance
+      if (account == process.env.OWNER_ADDRESS) {
+        const contractBalance = await lookUpContract.getContractBalance();
+        const mainBal = ethers.utils.formatUnits(
+          contractBalance.toString(),
+          "ether"
+        );
+        
+        console.log(mainBal);
+        setMainBalance(mainBal);
+      }
+
+      //get all ERC20 token
+      const getAllERC20TokenListed = await lookUpContract.getAllERC20Tokens();
+
+      //
+      const parsedToken = getAllERC20TokenListed.map()
     } catch (error) {
       
     }
